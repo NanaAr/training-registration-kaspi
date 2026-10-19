@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="ka">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ტრენინგებზე რეგისტრაცია</title>
+  <style>
+    :root { color-scheme: light; --ink:#182230; --muted:#667085; --line:#d0d5dd; --blue:#175cd3; --bg:#f5f7fb; }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:system-ui,-apple-system,"Segoe UI",sans-serif; color:var(--ink); background:var(--bg); }
+    main { width:min(680px, calc(100% - 28px)); margin:40px auto; }
+    .card { background:white; border:1px solid #eaecf0; border-radius:20px; padding:clamp(20px,4vw,34px); box-shadow:0 10px 30px #1018280a; }
+    h1 { margin:0 0 8px; font-size:clamp(25px,4vw,34px); line-height:1.2; }
+    .intro { color:var(--muted); line-height:1.6; margin:0 0 24px; }
+    label { display:block; font-weight:650; margin:16px 0 7px; }
+    input[type=text], input[type=email] { width:100%; padding:13px 14px; border:1px solid var(--line); border-radius:10px; font:inherit; background:white; }
+    input:focus { outline:3px solid #d1e0ff; border-color:var(--blue); }
+    .options { display:grid; gap:10px; margin-top:8px; }
+    .option { display:flex; gap:12px; align-items:flex-start; border:1px solid var(--line); border-radius:12px; padding:14px; cursor:pointer; }
+    .option:has(input:checked) { border-color:var(--blue); background:#eff8ff; }
+    .option input { margin-top:5px; accent-color:var(--blue); }
+    .option strong { display:block; margin-bottom:4px; }
+    .count { color:var(--muted); font-size:13px; }
+    button { margin-top:22px; width:100%; padding:14px 18px; border:0; border-radius:10px; background:var(--blue); color:white; font:inherit; font-weight:700; cursor:pointer; }
+    button:disabled { opacity:.55; cursor:not-allowed; }
+    .notice { display:none; margin-top:18px; padding:13px 14px; border-radius:10px; line-height:1.5; }
+    .notice.show { display:block; }
+    .notice.info { background:#eff8ff; color:#1849a9; }
+    .notice.error { background:#fef3f2; color:#b42318; }
+    .notice.success { background:#ecfdf3; color:#027a48; }
+    .small { color:var(--muted); font-size:12px; line-height:1.5; margin-top:18px; }
+  </style>
+</head>
+<body>
+<main>
+  <section class="card">
+    <h1>ტრენინგებზე რეგისტრაცია</h1>
+    <p class="intro">შეიყვანეთ მონაცემები და აირჩიეთ ერთი ტრენინგი. თითოეულ ტრენინგზე ხელმისაწვდომია მაქსიმუმ 25 ადგილი.</p>
+    <form id="registrationForm">
+      <label for="firstName">სახელი</label>
+      <input id="firstName" name="firstName" type="text" autocomplete="given-name" required maxlength="80" placeholder="შეიყვანეთ სახელი" />
+
+      <label for="lastName">გვარი</label>
+      <input id="lastName" name="lastName" type="text" autocomplete="family-name" required maxlength="80" placeholder="შეიყვანეთ გვარი" />
+
+      <label for="email">ელფოსტა</label>
+      <input id="email" name="email" type="email" autocomplete="email" required maxlength="254" placeholder="მაგ. example@gmail.com" />
+
+      <label>აირჩიეთ ტრენინგი</label>
+      <div class="options">
+        <label class="option">
+          <input type="radio" name="training" value="cybersecurity" required />
+          <span><strong>კიბერუსაფრთხოება</strong><span id="cyberCount" class="count">იტვირთება…</span></span>
+        </label>
+        <label class="option">
+          <input type="radio" name="training" value="computer_networks" required />
+          <span><strong>კომპიუტერული ქსელები</strong><span id="networkCount" class="count">იტვირთება…</span></span>
+        </label>
+      </div>
+      <button id="submitButton" type="submit">რეგისტრაცია</button>
+    </form>
+    <div id="notice" class="notice" role="status" aria-live="polite"></div>
+    <p class="small">ელფოსტაზე დადასტურება საჭირო არ არის. ერთი და იგივე ელფოსტით მხოლოდ ერთი რეგისტრაცია დაიშვება.</p>
+  </section>
+</main>
+
+<script type="module">
+  import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+
+  // Supabase-ის Project URL და public anon/publishable key.
+  // არასოდეს გამოიყენოთ service_role key ბრაუზერში.
+  const SUPABASE_URL = 'https://siriecsxjokbjrgloefx.supabase.co';
+  const SUPABASE_ANON_KEY = 'sb_publishable_P_g5o_nglxheEkYV0h0ttA_SmK4t-Wp';
+
+  const form = document.querySelector('#registrationForm');
+  const button = document.querySelector('#submitButton');
+  const notice = document.querySelector('#notice');
+  const cyberCount = document.querySelector('#cyberCount');
+  const networkCount = document.querySelector('#networkCount');
+
+  const configured = SUPABASE_URL.startsWith('https://') &&
+    SUPABASE_ANON_KEY !== 'YOUR_SUPABASE_ANON_KEY';
+  const supabase = configured ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+
+  function showNotice(message, type = 'info') {
+    notice.textContent = message;
+    notice.className = `notice show ${type}`;
+  }
+
+  async function refreshCounts() {
+    if (!configured) {
+      cyberCount.textContent = 'საჭიროა სისტემის კონფიგურაცია';
+      networkCount.textContent = 'საჭიროა სისტემის კონფიგურაცია';
+      return;
+    }
+    const { data, error } = await supabase.rpc('get_training_counts');
+    if (error) {
+      cyberCount.textContent = 'ადგილების რაოდენობა მიუწვდომელია';
+      networkCount.textContent = 'ადგილების რაოდენობა მიუწვდომელია';
+      return;
+    }
+    const counts = Object.fromEntries((data || []).map(row => [row.training, Number(row.registered_count)]));
+    const cyber = counts.cybersecurity || 0;
+    const networks = counts.computer_networks || 0;
+    cyberCount.textContent = cyber >= 25 ? 'ადგილები შევსებულია' : `თავისუფალია ${25 - cyber} ადგილი`;
+    networkCount.textContent = networks >= 25 ? 'ადგილები შევსებულია' : `თავისუფალია ${25 - networks} ადგილი`;
+    document.querySelectorAll('input[name="training"]').forEach(radio => {
+      const full = radio.value === 'cybersecurity' ? cyber >= 25 : networks >= 25;
+      radio.disabled = full;
+      radio.closest('.option').style.opacity = full ? '.6' : '1';
+    });
+  }
+
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if (!configured) {
+      showNotice('სისტემა ჯერ არ არის კონფიგურირებული. მიჰყევით README ფაილში მოცემულ ინსტრუქციას.', 'error');
+      return;
+    }
+
+    const firstName = document.querySelector('#firstName').value.trim();
+    const lastName = document.querySelector('#lastName').value.trim();
+    const email = document.querySelector('#email').value.trim().toLowerCase();
+    const selected = form.querySelector('input[name="training"]:checked');
+    if (!selected) return;
+
+    button.disabled = true;
+    button.textContent = 'მუშავდება…';
+    try {
+      const { error } = await supabase.rpc('register_for_training', {
+        p_first_name: firstName,
+        p_last_name: lastName,
+        p_email: email,
+        p_training: selected.value
+      });
+      if (error) {
+        if (error.message?.includes('EMAIL_ALREADY_REGISTERED')) throw new Error('ამ ელფოსტით რეგისტრაცია უკვე არსებობს.');
+        if (error.message?.includes('TRAINING_FULL')) throw new Error('ამ ტრენინგზე ყველა ადგილი შევსებულია. აირჩიეთ მეორე ტრენინგი.');
+        if (error.message?.includes('INVALID_EMAIL')) throw new Error('გთხოვთ, შეიყვანოთ სწორი ელფოსტა.');
+        throw error;
+      }
+      showNotice('რეგისტრაცია წარმატებით დასრულდა. გმადლობთ!', 'success');
+      form.reset();
+      await refreshCounts();
+    } catch (error) {
+      showNotice(error.message || 'შეცდომა მოხდა. სცადეთ ხელახლა.', 'error');
+    } finally {
+      button.disabled = false;
+      button.textContent = 'რეგისტრაცია';
+    }
+  });
+
+  await refreshCounts();
+</script>
+</body>
+</html>
